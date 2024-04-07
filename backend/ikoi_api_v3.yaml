@@ -1,0 +1,139 @@
+openapi: 3.0.0
+info:
+  title: IKOI MVP API
+  description: API to fetch and add employee records and actions based on employee ID, action IDs, and date range.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+paths:
+  /get_records:
+    post:
+      summary: Fetch records for a given employee and date range.
+      description: Returns a list of records for the specified employee ID within the given date range.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                employee_id:
+                  type: integer
+                  example: 5
+                from_date:
+                  type: string
+                  format: date
+                  example: '2024-04-01'
+                to_date:
+                  type: string
+                  format: date
+                  example: '2024-04-30'
+      responses:
+        '200':
+          description: An array of records.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    employee_name:
+                      type: string
+                    record_date:
+                      type: string
+                      format: date
+                    action_id:
+                      type: integer
+                    action_name:
+                      type: string
+                    action_category_name:
+                      type: string
+        '400':
+          description: Invalid input
+        '500':
+          description: Internal server error
+  /get_action_data:
+    post:
+      summary: Get action data for a given employee
+      description: Returns action data associated with the provided employee ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                employee_id:
+                  type: integer
+                  description: The employee ID to fetch action data for.
+              required:
+                - employee_id
+            example:
+              employee_id: 1
+      responses:
+        '200':
+          description: A list of actions associated with the employee.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    action_name:
+                      type: string
+                      description: The name of the action.
+                    action_category_name:
+                      type: string
+                      description: The name of the action category.
+        '400':
+          description: Bad request, such as missing employee_id in the request body.
+  /add_records:
+    post:
+      summary: Add individual records for selected actions
+      description: Adds individual records to the records table for each selected action based on the provided action IDs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - employee_id
+                - record_date
+                - action_ids
+              properties:
+                employee_id:
+                  type: integer
+                  description: The ID of the employee to whom the record(s) will be associated.
+                  example: 5
+                record_date:
+                  type: string
+                  format: date
+                  description: The date of the record(s).
+                  example: '2024-04-05'
+                action_ids:
+                  type: array
+                  description: A list of action IDs for which individual records will be added.
+                  items:
+                    type: integer
+                  example: [1, 2, 3]
+      responses:
+        '200':
+          description: Successfully added the records.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Records added successfully.
+        '400':
+          description: Invalid input provided.
+        '500':
+          description: Internal server error occurred while adding the records.
