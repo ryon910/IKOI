@@ -1,5 +1,5 @@
 # 必要なライブラリのインポート
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 from db_control import mymodels, crud
@@ -17,39 +17,59 @@ def index():
 # employee_idとrecord_dateの期間を指定することで、特定の人、期間のrecordsデータを返すAPI
 @app.route('/get_records', methods=['POST'])
 def get_records():
-    #frontendからJSON形式で以下の情報を受け取る。
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+
     values = request.get_json()
-    employee_id = values.get('employee_id')
-    from_date = values.get('from_date')
-    to_date = values.get('to_date')
 
-    # 文字列からdatetimeオブジェクトに変換
-    from_date = datetime.strptime(from_date, '%Y-%m-%d')
-    to_date = datetime.strptime(to_date, '%Y-%m-%d')
+    try:
+        employee_id = int(values['employee_id'])  # 整数への変換を試みる
+        from_date = datetime.strptime(values['from_date'], '%Y-%m-%d')
+        to_date = datetime.strptime(values['to_date'], '%Y-%m-%d')
+    except KeyError as e:
+        return jsonify({'error': f'Missing data for key: {e}'}), 400
+    except ValueError as e:
+        return jsonify({'error': f'Invalid date format or data type: {e}'}), 400
 
-    # 取得関数を呼び出し(crud.pyに記載の関数get_filtered_recordsを、mymodels.pyに記載のRecordsテーブルに対して実行する。必要な引数も渡す。)
-    result = crud.get_filtered_records(mymodels.Records, employee_id, from_date, to_date)
-    return result, 200
+    result = crud.get_filtered_records(employee_id, from_date, to_date)
+    if result:
+        return jsonify(result), 200
+    else:
+        return jsonify({'error': 'No records found'}), 404
 
 # employee_idを指定することで、特定の人に表示すべきactionsデータを返すAPI
 @app.route('/get_action_data', methods=['POST'])
 def get_action_data():
-    #frontendからJSON形式で以下の情報を受け取る。
+    if not request.is_json:
+        return jsonify({"error": "Request body must be JSON"}), 400
+
     value = request.get_json()
     employee_id = value.get('employee_id')
 
-    # 取得関数を呼び出し(crud.pyに記載の関数get_filtered_actionsを、mymodels.pyに記載のEmployeesテーブルに対して実行する。必要な引数も渡す。)
-    result = crud.get_filtered_actions(mymodels.Employees, employee_id)
-    return result, 200
+    if employee_id is None:
+        return jsonify({"error": "Missing employee_id"}), 400
+
+    try:
+        employee_id = int(employee_id)  # 整数への変換を確実に行う
+    except ValueError:
+        return jsonify({"error": "employee_id must be an integer"}), 400
+
+    try:
+        result = crud.get_filtered_actions(employee_id)
+        if not result:
+            return jsonify({"error": "No actions found"}), 404
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # employee_idとrecord_dateとaction_idを渡すことで、recordsテーブルにデータを追加するAPI
 @app.route('/add_records', methods=['POST'])
 def add_records():
-    #frontendからJSON形式で以下の情報を受け取る。
+    # frontendからJSON形式で以下の情報を受け取る。
     data = request.get_json()
     employee_id = data['employee_id']
-    record_date = datetime.strptime(data["record_date"], "%Y-%m-%d").date() #日付のデータはstr型なので、datetime型に変換する
-    for action_id in data['action_ids']: #frontendからは複数のaction_idが送られてくるが、1つずつrecordsテーブルに追加する
+    record_date = datetime.strptime(data["record_date"], "%Y-%m-%d").date()  # 日付のデータはstr型なので、datetime型に変換する
+    for action_id in data['action_ids']:  # frontendからは複数のaction_idが送られてくるが、1つずつrecordsテーブルに追加する
         values = {
             'employee_id': employee_id,
             'record_date': record_date,

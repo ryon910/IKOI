@@ -17,99 +17,107 @@ from db_control.mymodels import Employees, Positions, Records, Actions, Categori
 # mymodelはmymodels.pyに記載のどのテーブルに対して操作をするかを指定する変数。
 
 # mymodel,employee_id, from_date, to_dateを指定することで、特定の人、期間のrecordsデータを返す関数。
-def get_filtered_records(mymodel, employee_id, from_date:date, to_date:date):
-    # session構築
+def get_filtered_records(employee_id, from_date:date, to_date:date):
     Session = sessionmaker(bind=engine)
     session = Session()
-    # 必要なテーブルを結合して、フィルターをかけて、必要なデータのみ抽出する。
-    query = session.query(mymodel) \
-            .join(Records, Records.employee_id == Employees.employee_id) \
+
+    try:
+        query = session.query(Records, Employees, Actions, Categories, Positions) \
+            .join(Employees, Records.employee_id == Employees.employee_id) \
             .join(Actions, Records.action_id == Actions.action_id) \
             .join(Categories, Actions.action_category_id == Categories.action_category_id) \
             .join(Positions, Employees.position_id == Positions.position_id) \
-            .filter(Employees.employee_id == employee_id)\
-            .filter(Records.record_date >= from_date)\
+            .filter(Employees.employee_id == employee_id) \
+            .filter(Records.record_date >= from_date) \
             .filter(Records.record_date <= to_date)
 
-    try:
-        # トランザクションを開始
-        with session.begin():
-            result = query.all()
-        # 結果をオブジェクトから辞書に変換し、リストに追加
-        result_dict_list = []
-        for records_info in result:
-            result_dict_list.append({
-                "employee_name": records_info.employee_name,
-                "record_date": records_info.record_date,
-                "action_id": records_info.action_id,
-                "action_name": records_info.action_name,
-                "action_category_name": records_info.action_category_name,
-            })
-        # リストをJSONに変換
-        result_json = json.dumps(result_dict_list, ensure_ascii=False)
-    except NoResultFound:
-        print("フィルターに一致するデータが存在しません。")
-    except MultipleResultsFound:
-        print("フィルターに一致するデータが複数存在します。")
-    except DBAPIError as e:
-        print("データベースのクエリ実行に失敗しました。エラー: ", e)
+        result = query.all()
+        result_dict_list = [{
+            "employee_name": employee.employee_name,
+            "record_date": record.record_date.strftime('%Y-%m-%d'),
+            "action_name": action.action_name,
+            "action_category_name": category.action_category_name,
+            "position_name": position.position_name
+        } for record, employee, action, category, position in result]
 
-    # セッションを閉じる
-    session.close()
-    return result_json
+        result_json = json.dumps(result_dict_list, ensure_ascii=False)
+        session.close()
+        return result_json
+
+    except NoResultFound:
+        session.close()
+        return json.dumps({"error": "No records found"}), 404
+    except MultipleResultsFound:
+        session.close()
+        return json.dumps({"error": "Multiple records found"}), 400
+    except DBAPIError as e:
+        session.close()
+        return json.dumps({"error": str(e)}), 500
 
 # mymodel,employee_idを指定することで、特定の人に表示すべきactionsデータを返す関数。
-def get_filtered_actions(mymodel, employee_id):
-    # session構築
+def get_filtered_actions(employee_id):
     Session = sessionmaker(bind=engine)
     session = Session()
-    query = session.query(mymodel) \
-            .join(Employees, Employees.position_id == Positions.position_id)\
-            .join(Positions, Positions.position_id == Categories.position_id)\
-            .join(Categories, Categories.action_category_id == Actions.action_category_id)\
-            .filter(Employees.employee_id == employee_id)
+
+    # クエリの基点を明確にし、JOIN順を修正
+    query = session.query(Actions.action_name, Categories.action_category_name, Positions.position_name) \
+                .select_from(Employees) \
+                .join(Records, Employees.employee_id == Records.employee_id) \
+                .join(Actions, Records.action_id == Actions.action_id) \
+                .join(Categories, Actions.action_category_id == Categories.action_category_id) \
+                .join(Positions, Employees.position_id == Positions.position_id) \
+                .filter(Employees.employee_id == employee_id)
+
     try:
-        # トランザクションを開始
-        with session.begin():
-            result = query.all()
+        result = query.all()
+        if not result:
+            return json.dumps({"error": "No actions found for the given employee ID"}), 404
+
         # 結果をオブジェクトから辞書に変換し、リストに追加
-        result_dict_list = []
-        for actions_info in result:
-            result_dict_list.append({
-                "action_name": actions_info.action_name,
-                "action_category_name": actions_info.action_category_name,
-            })
+        result_dict_list = [{
+            "action_name": action_name,
+            "category_name": category_name,
+            "position_name": position_name
+        } for action_name, category_name, position_name in result]
+
         # リストをJSONに変換
         result_json = json.dumps(result_dict_list, ensure_ascii=False)
-    except NoResultFound:
-        print("フィルターに一致するデータが存在しません。")
-    except MultipleResultsFound:
-        print("フィルターに一致するデータが複数存在します。")
-    except DBAPIError as e:
-        print("データベースのクエリ実行に失敗しました。エラー: ", e)
+        return result_json, 200
 
-    # セッションを閉じる
-    session.close()
-    return result_json
+    except NoResultFound:
+        return json.dumps({"error": "No actions found"}), 404
+    except MultipleResultsFound:
+        return json.dumps({"error": "Multiple actions found"}), 400
+    except DBAPIError as e:
+        return json.dumps({"error": f"Database query failed: {e}"}), 500
+    finally:
+        # セッションを閉じる
+        session.close()
 
 
 # mymodel, valuesを渡すことで、recordsテーブルにデータを追加する関数。
-def add_new_record(mymodel, values):
+def add_new_record(record_model, values):
     # session構築
     Session = sessionmaker(bind=engine)
     session = Session()
 
     # モデルのインスタンスを作成
-    instance = mymodel(**values)
+    instance = record_model(**values)
     try:
         # トランザクションを開始
         with session.begin():
             # データの挿入
             session.add(instance)
-    except sqlalchemy.exc.IntegrityError:
-        print("一意制約違反により、挿入に失敗しました")
-        session.rollback()
-
-    # セッションを閉じる
-    session.close()
-    return "inserted"
+        return "Record inserted successfully."
+    except sqlalchemy.exc.IntegrityError as e:
+        print("Integrity Error: 一意制約違反により、挿入に失敗しました。", str(e))
+        return "Integrity error occurred."
+    except sqlalchemy.exc.SQLAlchemyError as e:
+        print("SQLAlchemy Error: データベース操作中にエラーが発生しました。", str(e))
+        return "Database error occurred."
+    except Exception as e:
+        print("General Error: 操作中に予期しないエラーが発生しました。", str(e))
+        return "An unexpected error occurred."
+    finally:
+        # セッションを閉じる
+        session.close()
