@@ -1,0 +1,58 @@
+
+  
+  .submitButton {
+    background-color: #37cdbe;
+    color: white;
+    padding: 15px 60px;
+    border: none;
+    cursor: pointer;
+  }
+  
+
+  .submitContainer {
+    display: flex;
+    justify-content: center;
+    padding: 50px;
+  }
+  
+  .submitButton {
+    background-color: #37cdbe;
+    color: white;
+    padding: 15px 60px;
+    border: none;
+    cursor: pointer;
+  }
+
+  
+  .container {
+    display: flex;
+    flex-direction: column;
+    min-height: 80vh;
+  }
+  
+
+  
+  .mainContent {
+    flex: 1;
+  }
+  
+  .navbar {
+    background-color: #ffffff;
+    padding: 40px 40px;
+  }
+  
+  .card {
+    background-color: white;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .footer {
+    background-color: #2f3744;
+    color: #ffffff;
+    padding: 20px 20px;
+  }
+  
+
+ 
