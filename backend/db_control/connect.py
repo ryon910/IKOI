@@ -1,18 +1,20 @@
-# Pythonの標準ライブラリで、実行中のプラットフォーム（オペレーティングシステムやハードウェアなど）に関する詳細情報を提供します。
-# platform.uname(): システムの詳細情報を含む名前付きタプルを返します。これには、システム名、ノード名（フルネーム）、リリース、バージョン、マシンタイプ、およびプロセッサ情報が含まれます。
-
-# uname() error回避
-import platform
-print(platform.uname())
-
-
-# SQLAlchemyのコアコンポーネントで、データベースとのコネクションを確立するためのエンジンを作成
-from sqlalchemy import create_engine
-import sqlalchemy
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 import os
 
 # ファイルパスの指定
 main_path = os.path.dirname(os.path.abspath(__file__))
-path = os.chdir(main_path)
-print(path)
-engine = create_engine("sqlite:///IKOI.db", echo=True)
+database_path = os.path.join(main_path, 'IKOI.db')
+
+# エンジンの作成
+engine = create_engine(
+    f"sqlite:///{database_path}",
+    echo=True
+)
+
+# SQLiteで外部キーを有効にするためのリスナー関数
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
